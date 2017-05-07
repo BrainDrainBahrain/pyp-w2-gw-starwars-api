@@ -9,7 +9,7 @@ class BaseModel(object):
 
     def __init__(self, json_data):
         """
-        Dynamically assign all attributes in `json_data` as instance
+        Dynamically assign all model attributes in `json_data` as instance
         attributes of the Model.
         """
         for key, value in six.iteritems(json_data):
@@ -34,7 +34,9 @@ class BaseModel(object):
         pages while looping.
         """
         RESOURCE = cls.RESOURCE_NAME
+        
         ClassQuery = '{}QuerySet()'.format(RESOURCE.capitalize())
+        
         return eval(ClassQuery)
 
 
@@ -50,6 +52,7 @@ class People(BaseModel):
 
 
 class Films(BaseModel):
+    
     RESOURCE_NAME = 'films'
 
     def __init__(self, json_data):
@@ -58,30 +61,20 @@ class Films(BaseModel):
     def __repr__(self):
         return 'Film: {0}'.format(self.title)
 
-
-"""
-Call iterator
-next should return next item
-
-next handles:
-check to see if any more objects
-if so return object
-if not try to grab next page > add new items to self.objects
-if no next page raise stopiteration
-"""
-
 class BaseQuerySet(object):
 
     def __init__(self):
-        get_RESOURCE = 'get_{}'.format(self.RESOURCE_NAME)
-        get_page_data_method = getattr(api_client, get_RESOURCE)
-        whole_page_json_data =  get_page_data_method()
-        
         
         self.current_page = 0
         self.current_element = 0
-        self._count = whole_page_json_data["count"]
         self.objects = []
+        
+        #Assign _count a value in a generic way
+        get_RESOURCE = 'get_{}'.format(self.RESOURCE_NAME)
+        get_page_data = getattr(api_client, get_RESOURCE)
+        whole_page_json_data =  get_page_data()
+        
+        self._count = whole_page_json_data["count"]
 
     def __iter__(self):
         
@@ -94,15 +87,18 @@ class BaseQuerySet(object):
         """
         
         while True:
-                if self.current_element + 1 > len(self.objects):
-                    # need to request a new page
-                    try:
-                        self._request_next_page()
-                    except SWAPIClientError:
-                        raise StopIteration()
-                elem = self.objects[self.current_element]
-                self.current_element += 1
-                return elem
+            if self.current_element + 1 > len(self.objects):
+                # need to request a new page
+                try:
+                    self._request_next_page()
+                except SWAPIClientError:
+                    raise StopIteration()
+                    
+            elem = self.objects[self.current_element]
+            self.current_element += 1
+            
+            return elem
+
     
     def _request_next_page(self):
         """
@@ -112,13 +108,12 @@ class BaseQuerySet(object):
         # increate the page counter to request the following page
         self.current_page += 1
     
-        # request next page in a generic way. Similar to what we did in BaseModel
-        method_name = 'get_{}'.format(self.RESOURCE_NAME)
-        method = getattr(api_client, method_name)
-        json_data = method(**{'page': self.current_page})
+        # request next page in a generic way.
+        method_parcel = 'get_{}'.format(self.RESOURCE_NAME)
+        get_next_page = getattr(api_client, method_parcel)
+        json_data = get_next_page(**{'page': self.current_page})
     
-        # remember that each element in `self.objects` needs to be an instance
-        # of the proper Model class. For that we will instantiate the Model class
+        # Instantiate the Model class for each result
         # (either People or Films) for each result in the new page.
         Model = eval(self.RESOURCE_NAME.title())
         for resource_data in json_data['results']:
